@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="initial-scale=1,maximum-scale=1,user-scalable=no"
+    />
+    <title>Load a basic WebMap - 4.12</title>
+
+    <style>
+      html,
+      body,
+      #viewDiv {
+        padding: 0;
+        margin: 0;
+        height: 100%;
+        width: 100%;
+      }
+      
+      #info {
+        background-color: black;
+        opacity: 0.75;
+        color: orange;
+        font-size: 18pt;
+        padding: 8px;
+        visibility: hidden;
+      }
+    </style>
+
+    <link
+      rel="stylesheet"
+      href="https://js.arcgis.com/4.12/esri/themes/light/main.css"
+    />
+
+    <!-- Denis - Lagt til jquery -->
+    <script
+      src="https://code.jquery.com/jquery-3.4.1.min.js"
+    >
+    </script>
+
+    <script src="https://js.arcgis.com/4.12/"></script>
+
+    <script>
+      require([
+      "esri/Map",
+      "esri/views/MapView", 
+      "esri/WebMap"
+     
+      ], 
+      function(
+          Map,
+          MapView,
+          WebMap) {
+        
+        var webmap = new WebMap({
+          portalItem: {
+            // autocasts as new PortalItem()
+            id: "bdb25667d90a4cafba2bc430864dc2c0"
+          }
+        });
+
+        var view = new MapView({
+          map: webmap,
+          container: "viewDiv",
+          highlightOptions: {
+            color: "orange"
+          }
+        });
+
+        // Denis - disable popup
+        view.popup = null;
+
+        webmap.loadAll()
+         .then(()=>{
+           
+           var belysningspunkt = webmap.allLayers.find(function(layer) {
+            return layer.title === "Belysningspunkt";
+           });
+           console.log("Layer added: ", belysningspunkt);
+
+           view
+            .when()
+            .then(function() {
+              console.log('when');
+              return belysningspunkt.when();
+            })
+            .then(function(layer) {           
+              console.log('hellolayerview', layer);
+              // const renderer = layer.renderer.clone();
+              // renderer.symbol.width = 4;
+              // renderer.symbol.color = [128, 128, 128, 0.8];
+              // layer.renderer = renderer;
+
+              
+
+              return view.whenLayerView(layer);
+            })
+            .then(function(layerView) {
+              console.log('layerview', layerView);
+              // view.on("pointer-move", eventHandler);
+              // view.on("pointer-down", eventHandler);
+              view.on("click", eventHandlerClick);
+
+              function eventHandler(event) {
+                console.log('event: ', event);
+                // the hitTest() checks to see if any graphics in the view
+                // intersect the x, y coordinates of the pointer
+                view.hitTest(event).then(getGraphics);
+              }
+
+              let highlight, currentYear, currentName;
+
+              function getGraphics(response) {
+                // the topmost graphic from the hurricanesLayer
+                // and display select attribute values from the
+                // graphic to the user
+                console.log('response.results: ', response);
+                if (response.results.length) {
+                  
+                  const graphic = response.results.filter(function(result) {
+                    console.log(result);
+                    return result.graphic.layer === belysningspunkt;
+                  })[0].graphic;
+
+
+
+                  const attributes = graphic.attributes;
+                  const category = attributes.Eier;
+                  const wind = attributes.RegistrertAv;
+                  const name = attributes.Kilde;
+                  const year = attributes.Effekt;
+                  const id = attributes.OBJECTID;
+
+                  console.log("attributes: ", attributes);
+
+                  if (
+                    highlight &&
+                    (currentName !== name || currentYear !== year)
+                  ) {
+                    highlight.remove();
+                    highlight = null;
+                    return;
+                  }
+
+                  document.getElementById("info").style.visibility = "visible";
+                  document.getElementById("name").innerHTML = name;
+                  document.getElementById("category").innerHTML =
+                    "Category " + category;
+                  document.getElementById("wind").innerHTML = wind + " kts";
+
+                  // highlight all features belonging to the same hurricane as the feature
+                  // returned from the hitTest
+                  const query = layerView.layer.createQuery();
+                  query.where = "YEAR = " + year + " AND NAME = '" + name + "'";
+                  layerView.queryObjectIds(query).then(function(ids) {
+                    highlight = layerView.highlight(ids);
+                    currentYear = year;
+                    currentName = name;
+                  });
+                } 
+                else {
+                  // remove the highlight if no features are
+                  // returned from the hitTest
+                  highlight.remove();
+                  highlight = null;
+                  document.getElementById("info").style.visibility = "hidden";
+                }
+              }
+            });
+
+
+        })
+
+        // view.ui.add("info", "top-right");
+
+        function eventHandlerClick(event) {
+          // console.log('click', event);
+          view.hitTest(event).then(getGraphicsOnClick);
+        }
+
+        function getGraphicsOnClick(response) {
+          if (response.results.length > 0) {
+            console.log('response.results: ', response.results, response.results.length);  
+            const graphic = response.results.filter(function(result) {
+              return result.graphic.layer.id === 'd4d10f5289d8421ebcdf52203532f14b';
+            })[0].graphic;
+
+            const attributes = graphic.attributes;
+            const id = attributes.OBJECTID;
+
+            $("#surveyBlock").css('display', 'block');
+            $("#surveyIframe").attr('src', 'https://survey123.arcgis.com/share/1c08b51d5c3a4e3fa5c394bb2445f84b?field:ObjektID=' + attributes.OBJECTID);
+          }
+        } 
+
+        $( document ).ready(function() {
+
+          $("#closeButton").on("click", function() {
+            $("#surveyBlock").css('display', 'none');
+            $("#surveyIframe").attr('src', '');
+            // document.getElementById('iframe').contentWindow.window.onbeforeunload=null; 
+            // document.getElementById('surveyIframe').contentWindow.window.onbeforeunload=function(){}; 
+            // document.getElementById('surveyIframe').contentWindow.alert = function(){}
+          })
+        });
+      });
+
+
+
+    </script>
+
+    <style>
+      html, body {
+        font-size: 62.5%;
+        font-family: Roboto;
+        font-weight: 400;
+        position: fixed;
+        overflow: hidden;
+        height: 100%;
+        width: 100%;
+        padding: 0;
+        margin: 0;
+      }
+      #surveyBlock {
+        /* display: flex; */
+        width: 100vw;
+        height: 100vh;
+        background-color: rgba(0,0,0,0.6);
+        text-align: center;
+        position: absolute;
+        top: 0;
+        left: 0;
+        /* padding-top: 100px; */
+        display: none;
+      }
+      #surveyIframe {
+        /* position: absolute; */
+        width: 500px;
+        height: calc(100vh - 200px);
+        /* left: calc((100vw/2)-150px); */
+        background-color: #fff;
+        margin: 100px auto;
+        border: none;
+      }
+      #closeButton {
+        position: absolute;
+        right: 2rem;
+        top: 2rem;
+        border: solid 1px red;
+        font-size: 2rem;
+        background-color: rgba(255,255,255,0.8);
+        border: solid 3px black;
+        border-radius: 4rem;
+        padding: 1rem 2rem;
+        cursor: pointer;
+        
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="viewDiv"></div>
+    <div id="info">
+      <span id="name"></span> <br />
+      <span id="category"></span> <br />
+      <span id="wind"></span>
+    </div>
+    <div id="surveyBlock">
+      <div id="closeButton">Lukk registreringen</div>
+      <iframe id="surveyIframe"></iframe>
+    </div>
+  </body>
+</html>
